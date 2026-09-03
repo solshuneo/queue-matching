@@ -4,47 +4,21 @@ import (
 	"slices"
 )
 
-const (
-	poolCapacity = 100
-)
-
-type actionType int
-
-var (
-	actionJoin    = actionType(1)
-	actionLeave   = actionType(2)
-	actionMatcher = actionType(3)
-)
-
-type Pool struct {
+type Pool1v1 struct {
 	action chan action
 	queue  []Client
 	match  chan *PairClient
 }
 
-type PairClient struct {
-	Client1 Client
-	Client2 Client
-}
-
-type Client interface {
-	GetRating() int
-}
-
-type action struct {
-	client Client
-	action actionType
-}
-
-func NewPool() *Pool {
-	return &Pool{
+func NewPool1v1() *Pool1v1 {
+	return &Pool1v1{
 		queue:  make([]Client, 0, poolCapacity),
 		action: make(chan action, poolCapacity),
 		match:  make(chan *PairClient, poolCapacity),
 	}
 }
 
-func (p *Pool) Start() {
+func (p *Pool1v1) Start() {
 	go func() {
 		for {
 			act := <-p.action
@@ -61,14 +35,14 @@ func (p *Pool) Start() {
 	}()
 }
 
-func (p *Pool) addClient(client Client) {
+func (p *Pool1v1) addClient(client Client) {
 	if slices.Contains(p.queue, client) {
 		return
 	}
 	p.queue = append(p.queue, client)
 }
 
-func (p *Pool) removeClient(client Client) {
+func (p *Pool1v1) removeClient(client Client) {
 	for i, c := range p.queue {
 		if c == client {
 			if i == len(p.queue)-1 {
@@ -81,7 +55,7 @@ func (p *Pool) removeClient(client Client) {
 	}
 }
 
-func (p *Pool) matcher() {
+func (p *Pool1v1) matcher() {
 	slices.SortFunc(p.queue, func(a, b Client) int {
 		return a.GetRating() - b.GetRating()
 	})
@@ -100,24 +74,24 @@ func (p *Pool) matcher() {
 	}
 }
 
-func (p *Pool) Join(client Client) {
+func (p *Pool1v1) Join(client Client) {
 	p.action <- action{client: client, action: actionJoin}
 }
 
-func (p *Pool) Leave(client Client) {
+func (p *Pool1v1) Leave(client Client) {
 	p.action <- action{client: client, action: actionLeave}
 }
 
-func (p *Pool) Matcher() {
+func (p *Pool1v1) Matcher() {
 	p.action <- action{action: actionMatcher}
 }
 
-func (p *Pool) Visualize() []Client {
+func (p *Pool1v1) Visualize() []Client {
 	clients := make([]Client, len(p.queue))
 	copy(clients, p.queue)
 	return clients
 }
 
-func (p *Pool) GetMatch() <-chan *PairClient {
+func (p *Pool1v1) GetMatch() <-chan *PairClient {
 	return p.match
 }
