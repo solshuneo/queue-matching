@@ -9,20 +9,24 @@ import (
 var ErrStillUrgentNotSolved = errors.New("Urgent not solved yet")
 
 type Pool1v1 struct {
-	action chan action
-	queue  []Client
-	match  chan *Clients
+	action    chan action
+	queue     []Client
+	match     chan *Clients
+	visualize chan []Client
 }
 
 func NewPool1v1() *Pool1v1 {
-	return &Pool1v1{
-		queue:  make([]Client, 0, poolCapacity),
-		action: make(chan action, poolCapacity),
-		match:  make(chan *Clients, poolCapacity),
+	pool := &Pool1v1{
+		queue:     make([]Client, 0, poolCapacity),
+		action:    make(chan action, poolCapacity),
+		match:     make(chan *Clients, poolCapacity),
+		visualize: make(chan []Client),
 	}
+	pool.start()
+	return pool
 }
 
-func (p *Pool1v1) Start() {
+func (p *Pool1v1) start() {
 	go func() {
 		for {
 			act := <-p.action
@@ -33,8 +37,11 @@ func (p *Pool1v1) Start() {
 				p.removeClient(act.client)
 			case actionMatcher:
 				p.matcher()
+			case actionVisualize:
+				clients := make([]Client, len(p.queue))
+				copy(clients, p.queue)
+				p.visualize <- clients
 			}
-
 		}
 	}()
 }
@@ -121,9 +128,8 @@ func (p *Pool1v1) Matcher() {
 }
 
 func (p *Pool1v1) Visualize() []Client {
-	clients := make([]Client, len(p.queue))
-	copy(clients, p.queue)
-	return clients
+	p.action <- action{action: actionVisualize}
+	return <-p.visualize
 }
 
 func (p *Pool1v1) GetMatch() <-chan *Clients {

@@ -9,9 +9,10 @@ const (
 type actionType int
 
 var (
-	actionJoin    = actionType(1)
-	actionLeave   = actionType(2)
-	actionMatcher = actionType(3)
+	actionJoin      = actionType(1)
+	actionLeave     = actionType(2)
+	actionMatcher   = actionType(3)
+	actionVisualize = actionType(4)
 )
 
 type Clients struct {
