@@ -1,8 +1,12 @@
 package queuepool
 
 import (
+	"errors"
 	"slices"
+	"time"
 )
+
+var ErrStillUrgentNotSolved = errors.New("Urgent not solved yet")
 
 type Pool1v1 struct {
 	action chan action
@@ -56,11 +60,12 @@ func (p *Pool1v1) removeClient(client Client) {
 }
 
 func (p *Pool1v1) matcher() {
-	slices.SortFunc(p.queue, func(a, b Client) int {
-		return a.GetRating() - b.GetRating()
-	})
-	for i := 0; i < len(p.queue)-1; {
-		if p.queue[i].GetRating() == p.queue[i+1].GetRating() {
+	// urgent solve first
+	for i := 0; i < len(p.queue); {
+		if isStatus(p.queue[i]) == Urgent {
+			if i == len(p.queue)-1 {
+				continue
+			}
 			res := &PairClient{
 				Client1: p.queue[i],
 				Client2: p.queue[i+1],
@@ -69,10 +74,34 @@ func (p *Pool1v1) matcher() {
 			p.removeClient(res.Client2)
 			p.match <- res
 		} else {
-			i++
+			i += 1
+		}
+	}
+	for i := 0; i < len(p.queue); {
+		delta, err := delta(p.queue[i])
+		if err != nil {
+			continue
+		}
+		for j := i + 1; j < len(p.queue); j++ {
+			if p.queue[i].GetRating()-delta < p.queue[j].GetRating() && p.queue[j].GetRating() < p.queue[i].GetRating()+delta {
+				res := &PairClient{
+					Client1: p.queue[i],
+					Client2: p.queue[j],
+				}
+				p.removeClient(res.Client1)
+				p.removeClient(res.Client2)
+				p.match <- res
+				break
+			} else {
+				if j == len(p.queue)-1 {
+					i += 1
+				}
+			}
 		}
 	}
 }
+
+// exported field
 
 func (p *Pool1v1) Join(client Client) {
 	p.action <- action{client: client, action: actionJoin}
@@ -94,4 +123,46 @@ func (p *Pool1v1) Visualize() []Client {
 
 func (p *Pool1v1) GetMatch() <-chan *PairClient {
 	return p.match
+}
+
+// helper
+type Status int
+
+var (
+	Urgent = Status(1)
+	Normal = Status(2)
+	Early  = Status(3)
+)
+
+func isStatus(client Client) Status {
+	t := client.GetArrivalTime()
+	if time.Since(t) >= 7*time.Minute {
+		return Urgent
+	}
+	if time.Since(t) <= 2*time.Microsecond {
+		return Early
+	}
+	return Normal
+}
+
+func delta(client Client) (int, error) {
+	steps := make(map[time.Duration]int)
+	steps[10*time.Second] = 5
+	steps[20*time.Second] = 10
+	steps[30*time.Second] = 20
+	steps[40*time.Second] = 30
+	steps[50*time.Second] = 40
+	steps[1*time.Minute] = 50
+	steps[2*time.Minute] = 100
+	steps[3*time.Minute] = 200
+	steps[4*time.Minute] = 300
+	steps[5*time.Minute] = 400
+	steps[6*time.Minute] = 500
+	steps[7*time.Minute] = 600
+	for _, v := range steps {
+		if int(time.Since(client.GetArrivalTime())) <= v {
+			return v, nil
+		}
+	}
+	return -1, ErrStillUrgentNotSolved
 }

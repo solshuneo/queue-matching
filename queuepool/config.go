@@ -1,5 +1,7 @@
 package queuepool
 
+import "time"
+
 const (
 	poolCapacity = 100
 )
@@ -19,6 +21,7 @@ type PairClient struct {
 
 type Client interface {
 	GetRating() int
+	GetArrivalTime() time.Time
 }
 
 type action struct {
