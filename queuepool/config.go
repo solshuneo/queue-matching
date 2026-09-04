@@ -14,9 +14,8 @@ var (
 	actionMatcher = actionType(3)
 )
 
-type PairClient struct {
-	Client1 Client
-	Client2 Client
+type Clients struct {
+	Clients []Client
 }
 
 type Client interface {

@@ -11,14 +11,14 @@ var ErrStillUrgentNotSolved = errors.New("Urgent not solved yet")
 type Pool1v1 struct {
 	action chan action
 	queue  []Client
-	match  chan *PairClient
+	match  chan *Clients
 }
 
 func NewPool1v1() *Pool1v1 {
 	return &Pool1v1{
 		queue:  make([]Client, 0, poolCapacity),
 		action: make(chan action, poolCapacity),
-		match:  make(chan *PairClient, poolCapacity),
+		match:  make(chan *Clients, poolCapacity),
 	}
 }
 
@@ -46,14 +46,21 @@ func (p *Pool1v1) addClient(client Client) {
 	p.queue = append(p.queue, client)
 }
 
+func (p *Pool1v1) removeClientByID(id int) {
+	if id < 0 || id >= len(p.queue) {
+		return
+	}
+	if id == len(p.queue)-1 {
+		p.queue = p.queue[:id]
+	} else {
+		p.queue = append(p.queue[:id], p.queue[id+1:]...)
+	}
+}
+
 func (p *Pool1v1) removeClient(client Client) {
 	for i, c := range p.queue {
 		if c == client {
-			if i == len(p.queue)-1 {
-				p.queue = p.queue[:i]
-			} else {
-				p.queue = append(p.queue[:i], p.queue[i+1:]...)
-			}
+			p.removeClientByID(i)
 			return
 		}
 	}
@@ -66,12 +73,11 @@ func (p *Pool1v1) matcher() {
 			if i == len(p.queue)-1 {
 				continue
 			}
-			res := &PairClient{
-				Client1: p.queue[i],
-				Client2: p.queue[i+1],
+			res := &Clients{
+				Clients: []Client{p.queue[i], p.queue[i+1]},
 			}
-			p.removeClient(res.Client1)
-			p.removeClient(res.Client2)
+			p.removeClientByID(i)
+			p.removeClientByID(i + 1)
 			p.match <- res
 		} else {
 			i += 1
@@ -84,12 +90,11 @@ func (p *Pool1v1) matcher() {
 		}
 		for j := i + 1; j < len(p.queue); j++ {
 			if p.queue[i].GetRating()-delta < p.queue[j].GetRating() && p.queue[j].GetRating() < p.queue[i].GetRating()+delta {
-				res := &PairClient{
-					Client1: p.queue[i],
-					Client2: p.queue[j],
+				res := &Clients{
+					Clients: []Client{p.queue[i], p.queue[j]},
 				}
-				p.removeClient(res.Client1)
-				p.removeClient(res.Client2)
+				p.removeClientByID(i)
+				p.removeClientByID(i + 1)
 				p.match <- res
 				break
 			} else {
@@ -121,7 +126,7 @@ func (p *Pool1v1) Visualize() []Client {
 	return clients
 }
 
-func (p *Pool1v1) GetMatch() <-chan *PairClient {
+func (p *Pool1v1) GetMatch() <-chan *Clients {
 	return p.match
 }
 
