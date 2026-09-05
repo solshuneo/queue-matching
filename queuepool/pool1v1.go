@@ -38,7 +38,7 @@ func (p *Pool1v1) start() {
 			case actionLeave:
 				p.removeClient(act.client)
 			case actionMatcher:
-				p.matcher()
+				p.matcher(act.atTime)
 			case actionVisualize:
 				clients := make([]Client, 0, len(p.queue))
 				for _, c := range p.queue {
@@ -75,10 +75,10 @@ func (p *Pool1v1) removeClient(client Client) {
 	p.identity.Delete(client.GetIdentity())
 }
 
-func (p *Pool1v1) matcher() {
+func (p *Pool1v1) matcher(atTime time.Time) {
 	// urgent solve first
 	for i := 0; i < len(p.queue); {
-		if isStatus(p.queue[i]) == Urgent {
+		if isStatus(atTime, p.queue[i]) == Urgent {
 			if i == len(p.queue)-1 {
 				continue
 			}
@@ -93,10 +93,7 @@ func (p *Pool1v1) matcher() {
 		}
 	}
 	for i := 0; i < len(p.queue); {
-		delta, err := delta(p.queue[i])
-		if err != nil {
-			continue
-		}
+		delta, _ := delta(atTime, p.queue[i])
 		for j := i + 1; j < len(p.queue); j++ {
 			irating := (*p.queue[i]).GetRating()
 			jrating := (*p.queue[j]).GetRating()
@@ -135,8 +132,8 @@ func (p *Pool1v1) Leave(client Client) bool {
 	return true
 }
 
-func (p *Pool1v1) Matcher() {
-	p.action <- action{action: actionMatcher}
+func (p *Pool1v1) Matcher(t time.Time) {
+	p.action <- action{atTime: t, action: actionMatcher}
 }
 
 func (p *Pool1v1) Visualize() <-chan []Client {
@@ -157,18 +154,18 @@ var (
 	Early  = Status(3)
 )
 
-func isStatus(client *Client) Status {
+func isStatus(now time.Time, client *Client) Status {
 	t := (*client).GetArrivalTime()
-	if time.Since(t) >= 7*time.Minute {
+	if now.Sub(t) >= 7*time.Minute {
 		return Urgent
 	}
-	if time.Since(t) <= 2*time.Microsecond {
+	if now.Sub(t) <= 2*time.Microsecond {
 		return Early
 	}
 	return Normal
 }
 
-func delta(client *Client) (int, error) {
+func delta(now time.Time, client *Client) (int, error) {
 	steps := make(map[time.Duration]int)
 	steps[10*time.Second] = 5
 	steps[20*time.Second] = 10
@@ -183,7 +180,7 @@ func delta(client *Client) (int, error) {
 	steps[6*time.Minute] = 500
 	steps[7*time.Minute] = 600
 	for _, v := range steps {
-		if int(time.Since((*client).GetArrivalTime())) <= v {
+		if int(now.Sub((*client).GetArrivalTime())) <= v {
 			return v, nil
 		}
 	}

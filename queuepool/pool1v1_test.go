@@ -12,7 +12,7 @@ func TestNewPool1v1(t *testing.T) {
 	if pool == nil {
 		t.Fatal("NewPool1v1 returned nil")
 	}
-} 
+}
 
 var _ queuepool.Client = player{}
 
@@ -107,4 +107,28 @@ func TestLeavePool1v1(t *testing.T) {
 	if len(clients) != 0 {
 		t.Fatalf("Expected 0 clients, got %d", len(clients))
 	}
+}
+
+func TestMatchPool1v1(t *testing.T) {
+	// urgent solve
+	atTime := time.Now()
+	pool := queuepool.NewPool1v1()
+	playerUrgent := player{id: 1, rating: 1000, arrivalTime: atTime.Add(-7 * time.Minute)}
+	playerNormal := player{id: 2, rating: 1500, arrivalTime: atTime}
+	_ = pool.Join(playerUrgent)
+	_ = pool.Join(playerNormal)
+	matcher := pool.GetMatch()
+	pool.Matcher(atTime)
+	clients := <-matcher
+	if len(clients.Clients) != 2 {
+		t.Fatalf("Expected 2 clients, got %d", len(clients.Clients))
+	}
+	if clients.Clients[0] != playerUrgent || clients.Clients[1] != playerNormal {
+		t.Fatalf("Expected %v and %v, got %v and %v", playerUrgent, playerNormal, clients.Clients[0], clients.Clients[1])
+	}
+	left := <-pool.Visualize()
+	if len(left) != 0 {
+		t.Fatalf("Expected 0 clients, got %d", len(left))
+	}
+	// lazy test - need some pull requests :D
 }
