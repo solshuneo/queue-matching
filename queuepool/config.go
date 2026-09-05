@@ -20,6 +20,7 @@ type Clients struct {
 }
 
 type Client interface {
+	GetIdentity() int
 	GetRating() int
 	GetArrivalTime() time.Time
 }
