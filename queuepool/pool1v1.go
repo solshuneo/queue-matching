@@ -77,41 +77,49 @@ func (p *Pool1v1) removeClient(client Client) {
 
 func (p *Pool1v1) matcher(atTime time.Time) {
 	// urgent solve first
-	for i := 0; i < len(p.queue); {
-		if isStatus(atTime, p.queue[i]) == Urgent {
-			if i == len(p.queue)-1 {
-				continue
-			}
-			res := &Clients{
-				Clients: []Client{*p.queue[i], *p.queue[i+1]},
-			}
-			p.removeClient(res.Clients[0])
-			p.removeClient(res.Clients[1])
-			p.match <- res
-		} else {
-			break
+	i := 0
+	for ; i+1 < len(p.queue); i += 2 {
+		if isStatus(atTime, p.queue[i]) != Urgent {
+			continue
 		}
+		res := &Clients{
+			Clients: []Client{*p.queue[i], *p.queue[i+1]},
+		}
+		p.match <- res
 	}
-	for i := 0; i < len(p.queue); {
+	p.queue = p.queue[i:]
+	ticks := make([]bool, len(p.queue))
+
+	for i := 0; i < len(p.queue); i++ {
+		if ticks[i] {
+			i += 1
+			continue
+		}
+		ticks[i] = true
 		delta, _ := delta(atTime, p.queue[i])
 		for j := i + 1; j < len(p.queue); j++ {
+			if ticks[j] {
+				continue
+			}
 			irating := (*p.queue[i]).GetRating()
 			jrating := (*p.queue[j]).GetRating()
 			if irating-delta < jrating && jrating < irating+delta {
+				ticks[j] = true
 				res := &Clients{
 					Clients: []Client{*p.queue[i], *p.queue[j]},
 				}
-				p.removeClient(res.Clients[0])
-				p.removeClient(res.Clients[1])
 				p.match <- res
 				break
-			} else {
-				if j == len(p.queue)-1 {
-					i += 1
-				}
 			}
 		}
 	}
+	temp := make([]*Client, 0, len(p.queue))
+	for i := 0; i < len(p.queue); i++ {
+		if !ticks[i] {
+			temp = append(temp, p.queue[i])
+		}
+	}
+	p.queue = temp
 }
 
 // exported field
